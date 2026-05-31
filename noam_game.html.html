@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>המבוך הבלתי נגמר</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: #101010;
+      color: white;
+      font-family: "Courier New", monospace;
+      overflow: hidden;
+      image-rendering: pixelated;
+    }
+    #gameWrap {
+      width: 100vw;
+      height: 100vh;
+      display: grid;
+      place-items: center;
+      background: radial-gradient(circle, #143d1b, #061007 70%);
+    }
+    canvas {
+      border: 6px solid #2b1a3d;
+      background: #154d22;
+      image-rendering: pixelated;
+      box-shadow: 0 0 0 6px #000, 0 0 30px #7b2cff;
+    }
+    #ui {
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      left: 10px;
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      font-size: 18px;
+      text-shadow: 2px 2px #000;
+      pointer-events: none;
+    }
+    .panel {
+      background: rgba(0,0,0,0.55);
+      border: 3px solid #7b2cff;
+      padding: 8px 12px;
+    }
+    #message {
+      position: fixed;
+      bottom: 18px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.75);
+      border: 3px solid #ffcc00;
+      padding: 10px 16px;
+      font-size: 18px;
+      display: none;
+      text-align: center;
+      max-width: 90vw;
+    }
+  </style>
+</head>
+<body>
+  <div id="gameWrap">
+    <canvas id="game" width="960" height="600"></canvas>
+  </div>
+
+  <div id="ui">
+    <div class="panel" id="stats"></div>
+    <div class="panel">WASD לזוז | רווח לקפוץ | E לתקוף/לאסוף</div>
+  </div>
+  <div id="message"></div>
+
+  <script>
+    const canvas = document.getElementById("game");
+    const ctx = canvas.getContext("2d");
+    ctx.imageSmoothingEnabled = false;
+
+    const keys = {};
+    const stats = document.getElementById("stats");
+    const messageBox = document.getElementById("message");
+
+    const MAX_LEVEL = 25;
+    const TILE = 48;
+    let level = 1;
+    let score = 0;
+    let gameOver = false;
+    let win = false;
+    let messageTimer = 0;
+
+    const playerSkins = ["🧙", "🦸", "🥷", "🧝", "👑"];
+    const weapons = ["🗡️", "🏹", "🪓", "🔮", "⚔️"];
+
+    const player = {
+      x: 70,
+      y: 460,
+      w: 34,
+      h: 42,
+      vx: 0,
+      vy: 0,
+      speed: 3.2,
+      jump: 12,
+      onGround: false,
+      hearts: 10,
+      maxHearts: 10,
+      skinLevel: 0,
+      weaponLevel: 0,
+      powerTimer: 0,
+      flyingTimer: 0,
+      attackCooldown: 0,
+      face: 1
+    };
+
+    let platforms = [];
+    let enemies = [];
+    let items = [];
+    let particles = [];
+    let portal = { x: 870, y: 475, w: 50, h: 70 };
+
+    function showMessage(text, time = 180) {
+      messageBox.textContent = text;
+      messageBox.style.display = "block";
+      messageTimer = time;
+    }
+
+    function rand(min, max) {
+      return Math.random() * (max - min) + min;
+    }
+
+    function rects(a, b) {
+      return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+    }
+
+    function resetPlayerForLevel() {
+      player.x = 70;
+      player.y = 460;
+      player.vx = 0;
+      player.vy = 0;
+      player.hearts = 10;
+      player.powerTimer = 0;
+      player.flyingTimer = 0;
+    }
+
+    function makeLevel() {
+      resetPlayerForLevel();
+      platforms = [
+        { x: 0, y: 535, w: 960, h: 65 },
+        { x: 120, y: 430, w: 170, h: 28 },
+        { x: 360, y: 360, w: 150, h: 28 },
+        { x: 590, y: 290, w: 140, h: 28 },
+        { x: 760, y: 430, w: 150, h: 28 }
+      ];
+
+      enemies = [];
+      items = [];
+      particles = [];
+
+      const difficulty = 1 + level * 0.18;
+      const monsterCount = Math.min(3 + Math.floor(level / 2), 12);
+
+      for (let i = 0; i < monsterCount; i++) {
+        enemies.push({
+          type: "monster",
+          emoji: ["👹", "🧟", "🕷️", "🐺", "🦇"][i % 5],
+          x: rand(180, 820),
+          y: 480,
+          w: 38,
+          h: 38,
+          vx: rand(1.1, 1.8) * difficulty * (Math.random() < 0.5 ? -1 : 1),
+          hp: Math.ceil(2 + level * 0.35),
+          damage: 1,
+          boss: false
+        });
+      }
+
+      if (level % 5 === 0) {
+        enemies.push({
+          type: "boss",
+          emoji: ["🐉", "👿", "🧌", "🦖", "💀"][Math.floor(level / 5) - 1],
+          x: 710,
+          y: 450,
+          w: 66,
+          h: 66,
+          vx: 1.4 * difficulty,
+          hp: 12 + level * 2,
+          damage: 2,
+          boss: true
+        });
+        showMessage("בוס ענק מחכה לך בשלב " + level + "!", 160);
+      }
+
+      items.push({ type: "weapon", emoji: weapons[Math.min(weapons.length - 1, Math.floor(level / 6))], x: 220, y: 390, w: 34, h: 34 });
+      items.push({ type: "skin", emoji: "✨", x: 430, y: 320, w: 34, h: 34 });
+      items.push({ type: "heart", emoji: "❤️", x: 655, y: 250, w: 34, h: 34 });
+
+      if (Math.random() < 0.45 || level === 1) {
+        items.push({ type: "frogDragon", emoji: "🐸🐉", x: rand(300, 760), y: 480, w: 58, h: 40 });
+      }
+    }
+
+    function drawTextEmoji(text, x, y, size = 34) {
+      ctx.font = size + "px serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(text, x, y);
+    }
+
+    function drawPixelForest() {
+      ctx.fillStyle = "#10491f";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      for (let i = 0; i < 45; i++) {
+        const x = (i * 73 + level * 19) % 1000 - 40;
+        const h = 120 + (i % 4) * 35;
+        ctx.fillStyle = i % 2 ? "#0b3317" : "#176324";
+        ctx.fillRect(x, 535 - h, 26, h);
+        ctx.fillStyle = i % 2 ? "#1b7a2d" : "#24933a";
+        ctx.fillRect(x - 28, 535 - h - 28, 82, 55);
+        ctx.fillRect(x - 14, 535 - h - 70, 56, 55);
+      }
+
+      ctx.fillStyle = "#6b2dd8";
+      ctx.fillRect(0, 535, 960, 65);
+      ctx.fillStyle = "#8b4dff";
+      for (let x = 0; x < 960; x += 48) ctx.fillRect(x + 8, 555, 24, 10);
+    }
+
+    function drawPlatforms() {
+      platforms.forEach(p => {
+        ctx.fillStyle = "#742de0";
+        ctx.fillRect(p.x, p.y, p.w, p.h);
+        ctx.fillStyle = "#a06bff";
+        ctx.fillRect(p.x, p.y, p.w, 8);
+        ctx.fillStyle = "#3b146f";
+        ctx.fillRect(p.x, p.y + p.h - 8, p.w, 8);
+      });
+    }
+
+    function drawPortal() {
+      ctx.fillStyle = "#210033";
+      ctx.fillRect(portal.x, portal.y, portal.w, portal.h);
+      ctx.strokeStyle = "#ffcc00";
+      ctx.lineWidth = 5;
+      ctx.strokeRect(portal.x, portal.y, portal.w, portal.h);
+      drawTextEmoji("🚪", portal.x + 25, portal.y + 34, 48);
+    }
+
+    function drawPlayer() {
+      if (player.powerTimer > 0) {
+        ctx.fillStyle = "rgba(255, 220, 0, 0.35)";
+        ctx.fillRect(player.x - 10, player.y - 12, player.w + 20, player.h + 20);
+      }
+      drawTextEmoji(playerSkins[player.skinLevel], player.x + player.w / 2, player.y + player.h / 2, 42);
+      drawTextEmoji(weapons[player.weaponLevel], player.x + player.w / 2 + 30 * player.face, player.y + 18, 28);
+
+      if (player.flyingTimer > 0) {
+        for (let i = 0; i < 3; i++) {
+          drawTextEmoji("💨", player.x + rand(-8, 8), player.y + player.h + rand(8, 28), 22);
+        }
+      }
+    }
+
+    function drawEnemies() {
+      enemies.forEach(e => {
+        drawTextEmoji(e.emoji, e.x + e.w / 2, e.y + e.h / 2, e.boss ? 64 : 40);
+        ctx.fillStyle = "#000";
+        ctx.fillRect(e.x, e.y - 12, e.w, 6);
+        ctx.fillStyle = e.boss ? "#ff3333" : "#ffcc00";
+        ctx.fillRect(e.x, e.y - 12, e.w * Math.max(0, e.hp / (e.boss ? 12 + level * 2 : Math.ceil(2 + level * 0.35))), 6);
+      });
+    }
+
+    function drawItems() {
+      items.forEach(it => drawTextEmoji(it.emoji, it.x + it.w / 2, it.y + it.h / 2, it.type === "frogDragon" ? 40 : 34));
+    }
+
+    function drawParticles() {
+      particles.forEach(p => drawTextEmoji(p.emoji, p.x, p.y, p.size));
+    }
+
+    function updatePlayer() {
+      const speedBoost = player.powerTimer > 0 ? 1.8 : 1;
+      player.vx = 0;
+      if (keys["a"] || keys["A"]) { player.vx = -player.speed * speedBoost; player.face = -1; }
+      if (keys["d"] || keys["D"]) { player.vx = player.speed * speedBoost; player.face = 1; }
+      if ((keys[" "] || keys["Space"]) && player.onGround) {
+        player.vy = -player.jump;
+        player.onGround = false;
+      }
+      if ((keys["w"] || keys["W"]) && player.flyingTimer > 0) {
+        player.vy = -6;
+      }
+      if (keys["s"] || keys["S"]) player.vy += 0.4;
+
+      player.vy += player.flyingTimer > 0 ? 0.16 : 0.55;
+      player.x += player.vx;
+      player.y += player.vy;
+      player.onGround = false;
+
+      platforms.forEach(p => {
+        if (rects(player, p) && player.vy >= 0 && player.y + player.h - player.vy <= p.y + 8) {
+          player.y = p.y - player.h;
+          player.vy = 0;
+          player.onGround = true;
+        }
+      });
+
+      player.x = Math.max(0, Math.min(canvas.width - player.w, player.x));
+      if (player.y > canvas.height) loseHeart(2);
+      if (player.powerTimer > 0) player.powerTimer--;
+      if (player.flyingTimer > 0) player.flyingTimer--;
+      if (player.attackCooldown > 0) player.attackCooldown--;
+    }
+
+    function updateEnemies() {
+      enemies.forEach(e => {
+        e.x += e.vx;
+        if (e.x < 30 || e.x + e.w > 930) e.vx *= -1;
+
+        if (e.boss && Math.random() < 0.018) {
+          particles.push({ emoji: "🍊", x: e.x + e.w / 2, y: e.y + 20, vx: (player.x - e.x) / 90, vy: -2, size: 24, orange: true, life: 130 });
+        }
+
+        if (rects(player, e)) {
+          if (player.powerTimer > 0) {
+            e.hp -= 0.12;
+          } else {
+            loseHeart(e.damage);
+            player.x -= 35 * Math.sign(e.vx || 1);
+            player.vy = -7;
+          }
+        }
+      });
+      enemies = enemies.filter(e => e.hp > 0);
+    }
+
+    function updateParticles() {
+      particles.forEach(p => {
+        p.x += p.vx || 0;
+        p.y += p.vy || 0;
+        p.vy = (p.vy || 0) + 0.05;
+        p.life--;
+        if (p.orange && rects(player, {x: p.x - 10, y: p.y - 10, w: 20, h: 20})) {
+          loseHeart(1);
+          p.life = 0;
+        }
+      });
+      particles = particles.filter(p => p.life > 0);
+    }
+
+    function collectItems() {
+      items.forEach(it => {
+        if (rects(player, it)) {
+          if (it.type === "weapon") {
+            player.weaponLevel = Math.min(weapons.length - 1, player.weaponLevel + 1);
+            score += 5;
+            showMessage("שדרגת נשק! " + weapons[player.weaponLevel]);
+          }
+          if (it.type === "skin") {
+            player.skinLevel = Math.min(playerSkins.length - 1, player.skinLevel + 1);
+            score += 5;
+            showMessage("סקין חדש! " + playerSkins[player.skinLevel]);
+          }
+          if (it.type === "heart") {
+            player.hearts = Math.min(player.maxHearts, player.hearts + 3);
+            score += 3;
+            showMessage("מצאת לבבות!");
+          }
+          if (it.type === "frogDragon") {
+            player.hearts = player.maxHearts;
+            player.powerTimer = 600;
+            player.flyingTimer = 600;
+            score += 10;
+            showMessage("🐸🐉 דרקון־צפרדע ירק מיץ תפוזים! קיבלת גלגל הצלה, 10 נקודות, כוח ותעופה ל־10 שניות!", 260);
+          }
+          it.dead = true;
+        }
+      });
+      items = items.filter(it => !it.dead);
+    }
+
+    function attack() {
+      if (!(keys["e"] || keys["E"]) || player.attackCooldown > 0) return;
+      player.attackCooldown = 25;
+      const range = 56 + player.weaponLevel * 12;
+      const attackBox = {
+        x: player.face === 1 ? player.x + player.w : player.x - range,
+        y: player.y - 8,
+        w: range,
+        h: player.h + 16
+      };
+      particles.push({ emoji: weapons[player.weaponLevel], x: attackBox.x + attackBox.w / 2, y: attackBox.y + 20, size: 30, life: 16 });
+      enemies.forEach(e => {
+        if (rects(attackBox, e)) {
+          e.hp -= 1 + player.weaponLevel + (player.powerTimer > 0 ? 3 : 0);
+          score += e.boss ? 2 : 1;
+        }
+      });
+    }
+
+    function loseHeart(n) {
+      player.hearts -= n;
+      player.x = Math.max(30, player.x - 20 * player.face);
+      player.y = Math.min(player.y, 470);
+      if (player.hearts <= 0) {
+        gameOver = true;
+        showMessage("הפסדת! רענן את הדף כדי להתחיל מחדש.", 99999);
+      }
+    }
+
+    function checkNextLevel() {
+      if (enemies.length === 0 && rects(player, portal)) {
+        score += 20 + level;
+        if (level >= MAX_LEVEL) {
+          win = true;
+          showMessage("ניצחת את כל 25 השלבים! אתה אלוף המבוך הבלתי נגמר! 🏆", 99999);
+        } else {
+          level++;
+          makeLevel();
+          showMessage("עלית לשלב " + level + "! הכול נהיה קשה יותר...", 160);
+        }
+      }
+    }
+
+    function updateUI() {
+      const hearts = "❤️".repeat(Math.max(0, player.hearts)) + "🖤".repeat(Math.max(0, player.maxHearts - player.hearts));
+      stats.innerHTML = `שלב: ${level}/${MAX_LEVEL}<br>ניקוד: ${score}<br>חיים: ${hearts}<br>נשק: ${weapons[player.weaponLevel]} | סקין: ${playerSkins[player.skinLevel]}`;
+    }
+
+    function drawTitle() {
+      ctx.fillStyle = "rgba(0,0,0,0.55)";
+      ctx.fillRect(300, 18, 360, 42);
+      ctx.fillStyle = "#ffcc00";
+      ctx.font = "26px Courier New";
+      ctx.textAlign = "center";
+      ctx.fillText("המבוך הבלתי נגמר", 480, 47);
+    }
+
+    function loop() {
+      if (!gameOver && !win) {
+        updatePlayer();
+        updateEnemies();
+        updateParticles();
+        collectItems();
+        attack();
+        checkNextLevel();
+      }
+
+      drawPixelForest();
+      drawPlatforms();
+      drawPortal();
+      drawItems();
+      drawEnemies();
+      drawParticles();
+      drawPlayer();
+      drawTitle();
+      updateUI();
+
+      if (messageTimer > 0) {
+        messageTimer--;
+        if (messageTimer <= 0) messageBox.style.display = "none";
+      }
+
+      requestAnimationFrame(loop);
+    }
+
+    window.addEventListener("keydown", e => {
+      keys[e.key] = true;
+      if (e.code === "Space") keys["Space"] = true;
+    });
+    window.addEventListener("keyup", e => {
+      keys[e.key] = false;
+      if (e.code === "Space") keys["Space"] = false;
+    });
+
+    makeLevel();
+    showMessage("ברוך הבא למבוך הבלתי נגמר! חיסל את האויבים ואז היכנס לדלת.", 220);
+    loop();
+  </script>
+</body>
+</html>

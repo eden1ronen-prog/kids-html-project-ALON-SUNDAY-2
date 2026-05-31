@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>משחק כאפות</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      font-family: Arial, sans-serif;
+      background: linear-gradient(#87ceeb, #d9f7ff);
+      user-select: none;
+    }
+
+    #game {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      background: linear-gradient(#9ee7ff 0%, #e9fbff 70%, #65b84a 70%, #378a31 100%);
+    }
+
+    #scoreBox {
+      position: absolute;
+      top: 15px;
+      right: 15px;
+      background: rgba(255, 255, 255, 0.85);
+      padding: 12px 18px;
+      border-radius: 14px;
+      font-size: 24px;
+      font-weight: bold;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+      z-index: 10;
+    }
+
+    #help {
+      position: absolute;
+      top: 15px;
+      left: 15px;
+      background: rgba(255, 255, 255, 0.85);
+      padding: 10px 14px;
+      border-radius: 14px;
+      font-size: 16px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+      z-index: 10;
+    }
+
+    .player {
+      position: absolute;
+      width: 60px;
+      height: 70px;
+      font-size: 54px;
+      text-align: center;
+      line-height: 70px;
+      transform: scaleX(-1);
+      transition: transform 0.08s;
+    }
+
+    .enemy {
+      position: absolute;
+      width: 55px;
+      height: 60px;
+      font-size: 46px;
+      text-align: center;
+      line-height: 60px;
+    }
+
+    .fainted {
+      opacity: 0.45;
+      transform: rotate(90deg);
+      filter: grayscale(1);
+    }
+
+    .slap {
+      animation: slapAnim 0.16s ease;
+    }
+
+    @keyframes slapAnim {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.35) rotate(-15deg); }
+      100% { transform: scale(1); }
+    }
+
+    .effect {
+      position: absolute;
+      font-size: 34px;
+      pointer-events: none;
+      animation: pop 0.45s ease forwards;
+      z-index: 5;
+    }
+
+    @keyframes pop {
+      0% { transform: scale(0.5); opacity: 1; }
+      100% { transform: scale(1.8) translateY(-35px); opacity: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div id="game">
+    <div id="scoreBox">כאפות: <span id="score">0</span></div>
+    <div id="help">WASD לזוז · רווח לקפוץ · התקרב לאויב ולחץ F לכאפה</div>
+    <div id="player" class="player">🧑</div>
+  </div>
+
+  <script>
+    const game = document.getElementById("game");
+    const playerEl = document.getElementById("player");
+    const scoreEl = document.getElementById("score");
+
+    const keys = {};
+    let score = 0;
+
+    const player = {
+      x: 120,
+      y: 0,
+      w: 60,
+      h: 70,
+      vx: 0,
+      vy: 0,
+      speed: 5,
+      jumpPower: 16,
+      onGround: false,
+      facing: 1
+    };
+
+    const groundY = () => window.innerHeight * 0.70 - player.h;
+
+    const enemyEmojis = ["😵", "🤡", "👾", "👻", "😈", "🤖", "🧟", "🐵"];
+    const enemies = [];
+
+    function createEnemy() {
+      const el = document.createElement("div");
+      el.className = "enemy";
+      el.textContent = enemyEmojis[Math.floor(Math.random() * enemyEmojis.length)];
+      game.appendChild(el);
+
+      const enemy = {
+        el,
+        x: 200 + Math.random() * (window.innerWidth - 260),
+        y: window.innerHeight * 0.70 - 60,
+        w: 55,
+        h: 60,
+        dir: Math.random() < 0.5 ? -1 : 1,
+        speed: 1 + Math.random() * 1.5,
+        fainted: false
+      };
+
+      enemies.push(enemy);
+    }
+
+    for (let i = 0; i < 7; i++) createEnemy();
+
+    document.addEventListener("keydown", (e) => {
+      keys[e.key.toLowerCase()] = true;
+
+      if (e.code === "Space" && player.onGround) {
+        player.vy = -player.jumpPower;
+        player.onGround = false;
+      }
+
+      if (e.key.toLowerCase() === "f") {
+        slap();
+      }
+    });
+
+    document.addEventListener("keyup", (e) => {
+      keys[e.key.toLowerCase()] = false;
+    });
+
+    function slap() {
+      playerEl.classList.add("slap");
+      setTimeout(() => playerEl.classList.remove("slap"), 160);
+
+      for (const enemy of enemies) {
+        if (enemy.fainted) continue;
+
+        const dx = Math.abs((player.x + player.w / 2) - (enemy.x + enemy.w / 2));
+        const dy = Math.abs((player.y + player.h / 2) - (enemy.y + enemy.h / 2));
+
+        const enemyIsInFront = player.facing === 1
+          ? enemy.x > player.x - 10
+          : enemy.x < player.x + player.w + 10;
+
+        if (dx < 80 && dy < 80 && enemyIsInFront) {
+          enemy.fainted = true;
+          enemy.el.classList.add("fainted");
+          enemy.el.textContent = "😵‍💫";
+          score++;
+          scoreEl.textContent = score;
+          showEffect(enemy.x, enemy.y, "👏💥");
+
+          setTimeout(() => {
+            enemy.el.remove();
+            const index = enemies.indexOf(enemy);
+            if (index !== -1) enemies.splice(index, 1);
+            createEnemy();
+          }, 1400);
+
+          break;
+        }
+      }
+    }
+
+    function showEffect(x, y, text) {
+      const effect = document.createElement("div");
+      effect.className = "effect";
+      effect.textContent = text;
+      effect.style.left = x + "px";
+      effect.style.top = y - 20 + "px";
+      game.appendChild(effect);
+      setTimeout(() => effect.remove(), 450);
+    }
+
+    function updatePlayer() {
+      player.vx = 0;
+
+      if (keys["a"]) {
+        player.vx = -player.speed;
+        player.facing = -1;
+      }
+      if (keys["d"]) {
+        player.vx = player.speed;
+        player.facing = 1;
+      }
+      if (keys["w"]) player.vy -= 0.25;
+      if (keys["s"] && !player.onGround) player.vy += 0.35;
+
+      player.x += player.vx;
+      player.vy += 0.8;
+      player.y += player.vy;
+
+      const floor = groundY();
+      if (player.y >= floor) {
+        player.y = floor;
+        player.vy = 0;
+        player.onGround = true;
+      }
+
+      player.x = Math.max(0, Math.min(window.innerWidth - player.w, player.x));
+
+      playerEl.style.left = player.x + "px";
+      playerEl.style.top = player.y + "px";
+      playerEl.style.transform = player.facing === 1 ? "scaleX(1)" : "scaleX(-1)";
+    }
+
+    function updateEnemies() {
+      for (const enemy of enemies) {
+        if (!enemy.fainted) {
+          enemy.x += enemy.dir * enemy.speed;
+
+          if (enemy.x < 0 || enemy.x > window.innerWidth - enemy.w) {
+            enemy.dir *= -1;
+          }
+        }
+
+        enemy.y = window.innerHeight * 0.70 - enemy.h;
+        enemy.el.style.left = enemy.x + "px";
+        enemy.el.style.top = enemy.y + "px";
+      }
+    }
+
+    function gameLoop() {
+      updatePlayer();
+      updateEnemies();
+      requestAnimationFrame(gameLoop);
+    }
+
+    player.y = groundY();
+    gameLoop();
+  </script>
+</body>
+</html>

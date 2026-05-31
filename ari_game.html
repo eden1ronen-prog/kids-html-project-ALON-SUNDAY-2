@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="he">
+<head>
+<meta charset="UTF-8">
+<title>Ball Scary</title>
+
+<style>
+body{
+    background:black;
+    color:white;
+    text-align:center;
+    font-family:Arial;
+}
+
+h1{
+    color:red;
+    text-shadow:0 0 20px red;
+}
+
+#ball{
+    width:200px;
+    height:200px;
+    border-radius:50%;
+    background:white;
+    margin:20px auto;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    font-size:90px;
+    cursor:pointer;
+    transition:0.3s;
+}
+
+button{
+    padding:10px 20px;
+    font-size:20px;
+    cursor:pointer;
+}
+
+#hearts{
+    font-size:35px;
+}
+
+#wheelResult{
+    margin-top:10px;
+    font-size:25px;
+}
+
+#scaryJump{
+    position:fixed;
+    left:50%;
+    top:50%;
+    transform:translate(-50%,-50%);
+    font-size:250px;
+    display:none;
+    z-index:999;
+}
+</style>
+</head>
+<body>
+
+<h1>🎈 BALL SCARY 👹</h1>
+
+<div id="hearts">❤️❤️❤️</div>
+
+<h2>שלב: <span id="stage">1</span></h2>
+
+<h2>לחיצות: <span id="clicks">0</span></h2>
+
+<div id="ball">😀</div>
+
+<button onclick="spinWheel()">🎡 סובב גלגל</button>
+
+<div id="wheelResult"></div>
+
+<div id="scaryJump">👹</div>
+
+<script>
+
+let clicks = 0;
+let hearts = 3;
+let stage = 1;
+
+const goals = [
+5000000,
+10000000,
+25000000,
+50000000,
+100000000
+];
+
+const faces = [
+"😀",
+"🙂",
+"😐",
+"😠",
+"👹"
+];
+
+const ball = document.getElementById("ball");
+
+ball.onclick = () => {
+
+clicks += 1000;
+
+document.getElementById("clicks").innerText =
+clicks.toLocaleString();
+
+checkStage();
+};
+
+function checkStage(){
+
+if(stage <= 5 && clicks >= goals[stage-1]){
+
+if(stage < 5){
+
+stage++;
+
+document.getElementById("stage").innerText = stage;
+
+ball.innerHTML = faces[stage-1];
+
+alert("עלית לשלב " + stage + "!");
+}
+else{
+
+buyScaryBall();
+}
+}
+}
+
+function spinWheel(){
+
+const result = Math.floor(Math.random()*4);
+
+if(result === 0){
+
+hearts--;
+
+updateHearts();
+
+document.getElementById("wheelResult").innerHTML =
+"🔴 עיגול אדום! איבדת לב!";
+
+if(hearts <= 0){
+
+alert("נגמרו הלבבות!");
+resetGame();
+}
+}
+else{
+
+const reward = Math.floor(Math.random()*50000)+10000;
+
+clicks += reward;
+
+document.getElementById("clicks").innerText =
+clicks.toLocaleString();
+
+document.getElementById("wheelResult").innerHTML =
+"🟢 זכית ב " + reward.toLocaleString() + " לחיצות!";
+
+checkStage();
+}
+}
+
+function updateHearts(){
+
+let text = "";
+
+for(let i=0;i<hearts;i++){
+text += "❤️";
+}
+
+document.getElementById("hearts").innerHTML = text;
+}
+
+function buyScaryBall(){
+
+let scary = document.getElementById("scaryJump");
+
+scary.style.display = "block";
+
+setTimeout(()=>{
+
+alert("👹 קנית את הכדור המפחיד! הוא קפץ עליך!");
+
+scary.style.display = "none";
+
+resetGame();
+
+},2000);
+}
+
+function resetGame(){
+
+clicks = 0;
+stage = 1;
+hearts = 3;
+
+document.getElementById("clicks").innerText = "0";
+document.getElementById("stage").innerText = "1";
+document.getElementById("hearts").innerHTML = "❤️❤️❤️";
+document.getElementById("wheelResult").innerHTML = "";
+ball.innerHTML = "😀";
+}
+
+</script>
+
+</body>
+</html>
